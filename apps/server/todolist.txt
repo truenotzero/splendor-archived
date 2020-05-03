@@ -1,0 +1,9 @@
+TODO list:
+1. Finish documentation of server
+2. Finish server.job implementation
+3. Decide if server is to be a separate core or a framework for login/channel
+4a. Create login core (if separate)
+4b. Create server api + login consumer (if framework)
+5. Presence core: keeps track of logged in players
+6. Auth core: keeps track of user accounts
+7. Avatar core: keeps track of characters
