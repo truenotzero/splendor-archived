@@ -19,7 +19,7 @@ defmodule Presence.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Presence.Application, []}
+      mod: {Presence, []}
     ]
   end
 

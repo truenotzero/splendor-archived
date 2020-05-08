@@ -1,11 +1,9 @@
 defmodule Server do
-  use Supervisor
-  def start_link(name) do
-    Supervisor.start_link(__MODULE__, name)
-  end
+  use Application
 
   @impl true
-  def init(name) do
+  def start(_type, _args) do
+    name = __MODULE__
     children = [
       {Registry, keys: :unique, name: name},
       {Server.JobDispatcher, name},
@@ -13,6 +11,6 @@ defmodule Server do
       {Server.Acceptor, name},
     ]
 
-    Supervisor.init(children, strategy: :rest_for_one)
+    Supervisor.start_link(children, strategy: :rest_for_one)
   end
 end
