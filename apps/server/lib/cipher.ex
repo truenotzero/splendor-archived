@@ -1,6 +1,6 @@
 defmodule Server.Cipher do
   @moduledoc """
-  Implements the game's cipher
+  Implements functions related to cryptography
   """
   import Bitwise
 
@@ -24,32 +24,32 @@ defmodule Server.Cipher do
   }
 
   @typedoc """
-  TODO
+  Cipher instance
   """
   @type t :: binary
 
   @typedoc """
-  TODO
+  Network packet header
   """
   @type header :: binary
 
   @typedoc """
-  TODO
+  Network packet length
   """
   @type packet_size :: non_neg_integer
 
   @typedoc """
-  TODO
+  Game version, major
   """
   @type version_major :: non_neg_integer
 
   @typedoc """
-  TODO
+  AES key
   """
   @type key :: binary
 
   @doc """
-  TODO
+  Spawn a new Cipher instance using cryptographically strong random bytes
   """
   @spec new :: t
   def new do
@@ -57,7 +57,12 @@ defmodule Server.Cipher do
   end
 
   @doc """
-  TODO
+  Decodes the length of a given network packet header
+
+  Examples
+
+  iex> decode_header(<<42, 101, 58, 101>>, <<116, 114, 117, 101>>, 95)
+  16
   """
   @spec decode_header(header, t, version_major) :: {:ok, packet_size} | {:error, :bad_header}
   def decode_header(_header = <<header_lo::little-16, header_hi::little-16>>,
@@ -71,6 +76,15 @@ defmodule Server.Cipher do
     end
   end
 
+  @doc """
+  Creates a header for a network packet given its size
+
+  ## Examples
+
+
+    iex> encode_header(16, <<116, 114, 117, 101>>, 95)
+    <<42, 101, 58, 101>>
+  """
   @spec encode_header(packet_size, t, version_major) :: header
   def encode_header(packet_size,
                     _iv = <<_iv_lo::little-16, iv_hi::little-16>>,
@@ -84,7 +98,7 @@ defmodule Server.Cipher do
   end
 
   @doc """
-  TODO
+  Encrypt some data
   """
   @spec encrypt(binary, t, key) :: binary
   def encrypt(data, iv, key) do
@@ -92,7 +106,7 @@ defmodule Server.Cipher do
   end
 
   @doc """
-  TODO
+  Decrypt some data
   """
   @spec decrypt(binary, t, key) :: binary
   def decrypt(data, iv, key) do
@@ -100,7 +114,9 @@ defmodule Server.Cipher do
   end
 
   @doc """
-  TODO
+  Get the next Cipher
+
+  After a packet body is decrypted, the cipher is to be renewed with this function
   """
   @spec next(t) :: t
   def next(iv) do
@@ -118,6 +134,7 @@ defmodule Server.Cipher do
   end
 
 
+  # AESOFB, currently does not implement the 0x5B0 reshuffle
   defp crypt(data, iv, key) do
     sz = byte_size(data) |> div(16)
     sz = 16 * (1 + sz)
@@ -133,6 +150,7 @@ defmodule Server.Cipher do
     :binary.copy(iv, 4)
   end
 
+  # adds shanda/CIGCipher::InnoHash
   defp apply_shanda(data) do
     size = byte_size(data)
     data = data |> :binary.bin_to_list()
@@ -163,6 +181,7 @@ defmodule Server.Cipher do
     |> :binary.list_to_bin()
   end
 
+  # removes shanda/CIGCipher::InnoHash
   defp remove_shanda(data) do
     size = byte_size(data)
     data = data |> :binary.bin_to_list() |> Enum.reverse()
@@ -194,6 +213,7 @@ defmodule Server.Cipher do
     |> :binary.list_to_bin()
   end
 
+  # bitwise left roll for byte-sized integers
   defp rol(b, count) do
     count = count |> rem(8)
     hi = b <<< count
@@ -201,6 +221,7 @@ defmodule Server.Cipher do
     (hi ||| lo) &&& 0xFF
   end
 
+  # bitwise right roll for byte-sized integers
   defp ror(b, count) do
     count = count |> rem(8)
     hi = b <<< (8 - count)
