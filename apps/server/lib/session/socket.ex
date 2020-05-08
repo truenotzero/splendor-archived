@@ -1,4 +1,7 @@
 defmodule Server.Session.Socket do
+  @moduledoc """
+  The network I/O part of a session
+  """
   import Kernel, except: [send: 2]
   require Logger
   use Server.Named
@@ -14,18 +17,22 @@ defmodule Server.Session.Socket do
             recv_iv: <<>>
 
   @typedoc """
-  TOOD
+  Instance representation
   """
   @type t :: pid
 
   ## Public API
 
+  @doc """
+  Start the socket
+  Required arguments: [queue, name, socket]
+  """
   def start_link(arg) do
     :gen_statem.start_link(__MODULE__, arg, [])
   end
 
   @doc """
-  TODO
+  Send a packet to the client
   """
   @spec send(binary, t) :: :ok
   def send(packet, socket) do
@@ -41,9 +48,13 @@ defmodule Server.Session.Socket do
 
   @impl :gen_statem
   def callback_mode do
-    [:handle_event_function, :state_enter]
+    [
+      :handle_event_function,   # states are arbitrary and not necessarily atoms
+      :state_enter              # a callback will be invoked every time the state changes
+    ]
   end
 
+  # state_change callback
   # old_state = new_state means that this state_enter handler handles
   # the initial state being entered
   @impl :gen_statem
@@ -59,17 +70,21 @@ defmodule Server.Session.Socket do
       send_iv <>
       <<8>>
 
-    # :ok = :gen_tcp.send(data.socket, packet)
     packet |> send(self())
-    setup_end()
+    setup_end() # sends an event to change states since we can't change state in the state_change callback
     {:keep_state, %{data | send_iv: send_iv, recv_iv: recv_iv}}
   end
 
+
+  # cast callback
+  # part two of setup, actually sets the state to :header
   @impl :gen_statem
   def handle_event(:cast, :end, :setup, data) do
     {:next_state, :header, data}
   end
 
+  # state_change callback
+  # checks if there's any leftover data in the buffer that needs processing
   @impl :gen_statem
   def handle_event(:enter, _old_state, state, data = %{size: size, buffer: buffer}) do
     buffer = if state != :queue do
@@ -80,6 +95,8 @@ defmodule Server.Session.Socket do
     {:keep_state, %{data | buffer: buffer}}
   end
 
+  # cast callback
+  # handles send packet events
   @impl :gen_statem
   def handle_event(:cast, {:send, packet}, state, %{send_iv: iv, socket: socket}) do
     version_major = Application.fetch_env!(:server, :version_major)
@@ -97,6 +114,8 @@ defmodule Server.Session.Socket do
     :keep_state_and_data
   end
 
+  # info callback
+  # handles incoming data from the raw socket
   @impl :gen_statem
   def handle_event(:info, {:tcp, socket, payload}, _state, data = %{size: size, buffer: buffer}) do
     buffer = buffer <> payload
@@ -106,6 +125,8 @@ defmodule Server.Session.Socket do
     {:keep_state, %{data | buffer: buffer}}
   end
 
+  # cast callback
+  # parses packet header and awaits matching body
   @impl :gen_statem
   def handle_event(:cast, {:process, payload}, :header, data) do
     Logger.debug("Processing header data")
@@ -120,6 +141,8 @@ defmodule Server.Session.Socket do
     end
   end
 
+  # cast callback
+  # processes packet body and sends it off for processing
   @impl :gen_statem
   def handle_event(:cast, {:process, packet}, :body, data = %{recv_iv: iv}) do
     Logger.debug("Processing body data")
@@ -130,6 +153,8 @@ defmodule Server.Session.Socket do
     {:next_state, :wait_queue, %{data | size: @header_size, recv_iv: iv |> Server.Cipher.next()} }
   end
 
+  # info callback
+  # awaits packet processing result
   @impl :gen_statem
   def handle_event(:info, {:queue, result}, :wait_queue, data) do
     case result do
@@ -141,25 +166,32 @@ defmodule Server.Session.Socket do
     end
   end
 
+  # info callback
+  # handles raw socket close event
+  # usually indicates that the remote client closed the connection
   @impl :gen_statem
   def handle_event(:info, {:tcp_closed, _socket}, _state, _data) do
     Logger.info("Session closed")
     {:stop, :tcp_closed}
   end
 
+  # generic catch-all
   @impl :gen_statem
   def handle_event(type, content, state, data) do
-    Logger.warn("unknown event/state")
-    IO.inspect(type, label: "type")
-    IO.inspect(content, label: "content")
-    IO.inspect(state, label: "state")
-    IO.inspect(data, label: "data")
+    Logger.warn("""
+                unknown event/state:
+                type: #{inspect type}
+                content: #{inspect content}
+                state: #{inspect state}
+                data: #{inspect data}
 
+                """)
     {:keep_state, data}
   end
 
   ## Private, helper functions ##
 
+  # checks if the buffer has enough information to dispatch a process event
   defp check_buffer(buffer, size) do
     if byte_size(buffer) >= size do
       <<payload::binary-size(size), buffer::binary>> = buffer
@@ -170,6 +202,10 @@ defmodule Server.Session.Socket do
     end
   end
 
+  # fires off the second part of the setup
+  # this is needed because the first part
+  # of the setup is a state_change handler
+  # which doesn't allow us to change state
   defp setup_end do
     self() |> :gen_statem.cast(:end)
   end
