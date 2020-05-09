@@ -3,7 +3,8 @@ defmodule Presence.Application do
 
   def start(_type, _args) do
     children = [
-      Presence.Store,
+      Presence.Migration.Store,
+      Presence.Player.Store,
     ]
 
     opts = [strategy: :one_for_one, name: Presence.Supervisor]
