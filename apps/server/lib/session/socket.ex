@@ -8,13 +8,8 @@ defmodule Server.Session.Socket do
   @behaviour :gen_statem
 
   @header_size 4
-  defstruct name: nil,
-            socket: nil,
-            queue: nil,
-            size: @header_size,
-            buffer: <<>>,
-            send_iv: <<>>,
-            recv_iv: <<>>
+  @enforce_keys [:name, :socket, :queue, :send_iv, :recv_iv, :size, :buffer, :affinity]
+  defstruct @enforce_keys
 
   @typedoc """
   Instance representation
@@ -43,7 +38,23 @@ defmodule Server.Session.Socket do
 
   @impl :gen_statem
   def init([queue, name, socket]) do
-    {:ok, :setup, %__MODULE__{name: name, socket: socket, queue: queue}}
+    case :inet.peername(socket) do
+      {:ok, {_ip = {a, b, c, d}, port}} -> Logger.info("Peer's address #{a}.#{b}.#{c}.#{d}:#{port}")
+      {:ok, {type, non_ip}} -> Logger.info("Peer's address: #{inspect type} - #{inspect non_ip}")
+      {:error, error} -> Logger.warn("Failed to get peer's address: #{inspect error}")
+    end
+
+    data = %__MODULE__{
+      name: name,
+      socket: socket,
+      queue: queue,
+      send_iv: Server.Cipher.new(),
+      recv_iv: Server.Cipher.new(),
+      buffer: <<>>,
+      size: @header_size,
+      affinity: :unknown
+    }
+    {:ok, :setup, data}
   end
 
   @impl :gen_statem
@@ -60,19 +71,16 @@ defmodule Server.Session.Socket do
   @impl :gen_statem
   def handle_event(:enter, :setup, :setup, data) do
     Server.Session.Queue.link(data.queue)
-    recv_iv = Server.Cipher.new()
-    send_iv = Server.Cipher.new()
-
     packet = <<
       95, 0,
       1, 0, ?1>> <>
-      recv_iv <>
-      send_iv <>
+      data.recv_iv <>
+      data.send_iv <>
       <<8>>
 
     packet |> send(self())
     setup_end() # sends an event to change states since we can't change state in the state_change callback
-    {:keep_state, %{data | send_iv: send_iv, recv_iv: recv_iv}}
+    :keep_state_and_data
   end
 
 

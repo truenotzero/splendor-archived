@@ -1,5 +1,9 @@
 defmodule Server.Job do
   use Task, restart: :temporary
+
+  def run(_packet) do
+    nil
+  end
 end
 
 defmodule Server.JobDispatcher do
