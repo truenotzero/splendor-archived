@@ -1,4 +1,4 @@
 # Splendor
 
-**TODO: Add description**
+https://discord.gg/AjjMrgf
 
