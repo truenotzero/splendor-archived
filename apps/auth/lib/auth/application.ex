@@ -7,8 +7,6 @@ defmodule Auth.Application do
 
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Auth.Worker.start_link(arg)
-      # {Auth.Worker, arg}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
